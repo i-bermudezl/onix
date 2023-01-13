@@ -14,8 +14,8 @@ template <typename T> class Buffer
     void write(T value, int x, int y);
 
   private:
-    int width;
-    int height;
+    const int width;
+    const int height;
     std::unique_ptr<T[]> buffer;
 };
 

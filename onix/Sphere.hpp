@@ -2,42 +2,44 @@
 
 #include <Eigen/Dense>
 
+#include "Hittable.hpp"
 #include "Ray.hpp"
 
-class Sphere
+class Sphere : public Hittable
 {
   public:
-    explicit Sphere(Eigen::Vector3d c, double r);
+    Sphere() = default;
+    explicit Sphere(const Eigen::Vector3d &c, double r);
 
-    bool hit(const Ray &r, double tMin, double tMax);
+    virtual bool hit(const Ray &r, double tMin, double tMax, HitRecord &hRecord) const override;
 
   private:
     Eigen::Vector3d center;
     double radius;
 };
 
-Sphere::Sphere(Eigen::Vector3d c, double r) : center{c}, radius{r}
+Sphere::Sphere(const Eigen::Vector3d &c, double r) : center{c}, radius{r}
 {
 }
 
-inline bool Sphere::hit(const Ray &r, double tMin, double tMax)
+inline bool Sphere::hit(const Ray &r, double tMin, double tMax, HitRecord &hRecord) const
 {
-    auto oc = r.getOrigin() - center;
-    auto a = r.getDirection().dot(r.getDirection());
-    auto halfB = oc.dot(r.getDirection());
-    auto c = oc.dot(oc) - radius * radius;
+    Eigen::Vector3d oc{r.getOrigin() - center};
+    double a{r.getDirection().dot(r.getDirection())};
+    double halfB{oc.dot(r.getDirection())};
+    double c{oc.dot(oc) - radius * radius};
 
-    auto discriminant = halfB * halfB - a * c;
-    if (discriminant < 0)
+    double discriminant{halfB * halfB - a * c};
+
+    if (discriminant < 0.0)
     {
-
         return false;
     }
 
-    auto sqrtd = sqrt(discriminant);
+    double sqrtd{sqrt(discriminant)};
 
-    // Find the nearest root that lies in the acceptable range.
-    auto root = (-halfB - sqrtd) / a;
+    // find the nearest root that lies in the acceptable range.
+    double root{(-halfB - sqrtd) / a};
     if (root < tMin || tMax < root)
     {
         root = (-halfB + sqrtd) / a;
@@ -46,6 +48,11 @@ inline bool Sphere::hit(const Ray &r, double tMin, double tMax)
             return false;
         }
     }
+
+    hRecord.t = root;
+    hRecord.p = r.at(hRecord.t);
+    Eigen::Vector3d outwardNormal{(hRecord.p - center) / radius};
+    hRecord.setFaceNormal(r, outwardNormal);
 
     return true;
 }

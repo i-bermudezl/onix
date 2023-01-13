@@ -1,4 +1,4 @@
-#prama once
+#pragma once
 
 #include <Eigen/Dense>
 
@@ -6,10 +6,25 @@
 
 struct HitRecord
 {
+    HitRecord() = default;
+    explicit HitRecord(Eigen::Vector3d p, Eigen::Vector3d normal, double t);
     Eigen::Vector3d p;
     Eigen::Vector3d normal;
     double t;
+    bool frontFace;
+
+    inline void setFaceNormal(const Ray &r, const Eigen::Vector3d outwardNormal);
 };
+
+HitRecord::HitRecord(Eigen::Vector3d p, Eigen::Vector3d normal, double t) : p{p}, normal{normal}, t{t}
+{
+}
+
+inline void HitRecord::setFaceNormal(const Ray &r, const Eigen::Vector3d outwardNormal)
+{
+    frontFace = r.getDirection().dot(outwardNormal) < 0.0;
+    normal = frontFace ? outwardNormal : -outwardNormal;
+}
 
 struct Hittable
 {

@@ -1,27 +1,18 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <memory>
 #include <numbers>
+#include <vector>
 
 #include <Eigen/Dense>
 #include <OpenEXR/ImfRgbaFile.h>
 
 #include "Buffer.hpp"
 #include "Color.hpp"
+#include "Hittable.hpp"
 #include "Ray.hpp"
 #include "Sphere.hpp"
-
-Sphere sphere{Eigen::Vector3d{0.0, 0.0, -2.0}, 0.5};
-
-Color trace(const Ray &ray, int depth)
-{
-    if (sphere.hit(ray, 0.0, std::numeric_limits<double>::infinity()))
-    {
-        return Color{1.0, 0.0, 0.0, 1.0};
-    }
-
-    return Color{1.0, 1.0, 1.0, 1.0};
-}
 
 void saveToFile(std::string name, const Buffer<Color> &buffer)
 {
@@ -52,7 +43,10 @@ int main(int argc, char **argv)
 
     auto frameBuffer = Buffer<Color>{width, height};
 
-    auto start{std::chrono::steady_clock::now()};
+    std::vector<std::unique_ptr<Hittable>> world;
+    world.emplace_back(std::make_unique<Sphere>(Eigen::Vector3d{0.0, 0.0, -2.0}, 0.5));
+
+    auto sr{std::chrono::steady_clock::now()};
     std::cout << "Begining rendering...\n";
     for (int i{0}; i < height; i++)
     {
@@ -80,16 +74,49 @@ int main(int argc, char **argv)
             direction.normalize();
             Ray r{origin, direction};
 
-            auto c{trace(r, 0)};
+            // ray trace
+            HitRecord record{};
+            auto closestSoFar{std::numeric_limits<double>::infinity()};
+            bool hitAnything{false};
+
+            Color c{};
+
+            for (const auto &object : world)
+            {
+                if (object->hit(r, 0.0, closestSoFar, record))
+                {
+                    hitAnything = true;
+                    closestSoFar = record.t;
+                }
+            }
+
+            // coloring
+            if (hitAnything)
+            {
+                Eigen::Vector3d vk = record.normal;
+                c = Color{0.5 * (vk.x() + 1.0), 0.5 * (vk.y() + 1.0), 0.5 * (vk.z() + 1.0), 1.0};
+            }
+            else
+            {
+                c = Color{1.0, 1.0, 1.0, 1.0};
+            }
 
             frameBuffer.write(c, j, i);
         }
     }
-    auto end{std::chrono::steady_clock::now()};
-    auto delta{std::chrono::duration_cast<std::chrono::milliseconds>(end - start)};
-    std::cout << "Rendering finished. Took: " << delta << '\n';
+    auto er{std::chrono::steady_clock::now()};
+    auto dr{std::chrono::duration_cast<std::chrono::milliseconds>(er - sr)};
+    std::cout << "Rendering finished. Took: " << dr << '\n';
 
+    auto sf{std::chrono::steady_clock::now()};
+    std::cout << "Saving to file...\n";
     saveToFile("render.exr", frameBuffer);
+    auto ef{std::chrono::steady_clock::now()};
+    auto df{std::chrono::duration_cast<std::chrono::milliseconds>(ef - sf)};
+    std::cout << "Saving image finished. Took: " << df << '\n';
+
+    std::cout << "Press any key to finish...\n";
+    std::cin.get();
 
     return 0;
 }
