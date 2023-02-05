@@ -41,3 +41,5 @@ current presets are:
 5. Run the app and have fun
 
 find the executable and run it, it should create an image called render.exr in the same directory of the executable
+
+> You can open the image in gimp or other image viewer supporting OpenEXR
