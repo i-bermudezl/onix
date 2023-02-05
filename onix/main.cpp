@@ -13,8 +13,48 @@
 #include "Buffer.hpp"
 #include "Color.hpp"
 #include "Hittable.hpp"
+#include "HittableList.hpp"
 #include "Ray.hpp"
 #include "Sphere.hpp"
+
+std::uniform_real_distribution<double> distribution(-1.0, 1.0);
+std::mt19937 generator;
+
+Eigen::Vector3d VectorInUnitSphere()
+{
+    while (true)
+    {
+        auto v = Eigen::Vector3d{distribution(generator), distribution(generator), distribution(generator)};
+        if (v.dot(v) >= 1.0)
+        {
+            continue;
+        }
+        return v;
+    }
+}
+
+Eigen::Vector3d rayColor(const Ray &r, const Hittable &world, int depth)
+{
+    HitRecord record;
+
+    // if we've exceeded the ray bounce limit, no more light is gathered.
+    if (depth <= 0)
+    {
+        return Eigen::Vector3d(0.0, 0.0, 0.0);
+    }
+
+    if (world.hit(r, 0.001, std::numeric_limits<double>::infinity(), record))
+    {
+        Eigen::Vector3d v{VectorInUnitSphere()};
+        v.normalize();
+        Eigen::Vector3d target = record.p + record.normal + v;
+        return 0.5 * rayColor(Ray{record.p, target - record.p}, world, depth - 1);
+    }
+
+    Eigen::Vector3d unitDirection{r.getDirection()};
+    auto t = 0.5 * (unitDirection.y() + 1.0);
+    return (1.0 - t) * Eigen::Vector3d{1.0, 1.0, 1.0} + t * Eigen::Vector3d{0.5, 0.7, 1.0};
+}
 
 void saveToFile(std::string name, const Buffer<Color> &buffer)
 {
@@ -37,21 +77,21 @@ void saveToFile(std::string name, const Buffer<Color> &buffer)
 
 int main(int argc, char **argv)
 {
-    int width{9};
-    int height{9};
+    int width{1920};
+    int height{1080};
 
     double aspectRatio{static_cast<double>(width) / height};
     double fov{std::numbers::pi / 4};
 
     constexpr int samplesPerPixel = 100;
 
-    std::uniform_real_distribution<double> distribution(0.0, 1.0);
-    std::mt19937 generator;
+    constexpr int maxDepth = 100;
 
     auto frameBuffer = Buffer<Color>{width, height};
 
-    std::vector<std::unique_ptr<Hittable>> world;
-    world.emplace_back(std::make_unique<Sphere>(Eigen::Vector3d{0.0, 0.0, -2.0}, 0.5));
+    HittableList world{};
+    world.objects.emplace_back(std::make_shared<Sphere>(Eigen::Vector3d{0.0, 0.0, -2.0}, 0.5));
+    world.objects.emplace_back(std::make_shared<Sphere>(Eigen::Vector3d{0.0, -100.5, -2.0}, 100.0));
 
     auto sr{std::chrono::steady_clock::now()};
     std::cout << "Begining rendering...\n";
@@ -63,12 +103,15 @@ int main(int argc, char **argv)
             for (int k{0}; k < samplesPerPixel; k++)
             {
                 // pixel space
-                auto pX{static_cast<double>(j)};
-                auto pY{static_cast<double>(i)};
+                auto pX{static_cast<double>(j) + 0.5};
+                auto pY{static_cast<double>(i) + 0.5};
+
+                auto u{pX + distribution(generator)};
+                auto v{pY + distribution(generator)};
 
                 // ndc
-                auto dX{(pX + 0.5) / width};
-                auto dY{(pY + 0.5) / height};
+                auto dX{u / width};
+                auto dY{v / height};
 
                 // screen space
                 auto sX{2 * dX - 1};
@@ -84,35 +127,10 @@ int main(int argc, char **argv)
                 direction.normalize();
                 Ray r{origin, direction};
 
-                // ray trace
-                HitRecord record{};
-                auto closestSoFar{std::numeric_limits<double>::infinity()};
-                bool hitAnything{false};
-
-                Color c{};
-
-                for (const auto &object : world)
-                {
-                    if (object->hit(r, 0.0, closestSoFar, record))
-                    {
-                        hitAnything = true;
-                        closestSoFar = record.t;
-                    }
-                }
-
-                // coloring
-                if (hitAnything)
-                {
-                    Eigen::Vector3d vk = record.normal;
-                    c = Color{0.5 * (vk.x() + 1.0), 0.5 * (vk.y() + 1.0), 0.5 * (vk.z() + 1.0), 1.0};
-                }
-                else
-                {
-                    c = Color{1.0, 1.0, 1.0, 1.0};
-                }
-
-                frameBuffer.write(c, j, i);
+                color += rayColor(r, world, maxDepth);
             }
+            color /= samplesPerPixel;
+            frameBuffer.write(Color{color.x(), color.y(), color.z(), 1.0}, j, i);
         }
     }
     auto er{std::chrono::steady_clock::now()};

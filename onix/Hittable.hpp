@@ -1,8 +1,12 @@
 #pragma once
 
+#include <memory>
+
 #include <Eigen/Dense>
 
 #include "Ray.hpp"
+
+struct Material;
 
 struct HitRecord
 {
@@ -10,6 +14,7 @@ struct HitRecord
     explicit HitRecord(Eigen::Vector3d p, Eigen::Vector3d normal, double t);
     Eigen::Vector3d p;
     Eigen::Vector3d normal;
+    std::shared_ptr<Material> material;
     double t;
     bool frontFace;
 
